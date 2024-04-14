@@ -281,9 +281,21 @@ app.put('/delete', (req, res) => {
 app.post('/submit-form', (req, res) => {
     const formData = req.body;
     // Process the form data as needed
-    console.log('Form data received:', formData);
+    
+    const processData = {
+        'student_Number': formData[1],
+        'full_Nmae': formData[2],
+        'hours_EmergencyWard': formData[3],
+        'hours_A': formData[4],
+        'hours_B': formData[5],
+        'field': formData[6],
+    }
+
+    console.log(processData);
+
     res.sendStatus(200); // Send a success response
 });
+
 
 app.listen(port, () => {
     console.log(`Server is running on profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com:${port}`);
