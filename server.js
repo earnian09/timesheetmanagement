@@ -16,10 +16,10 @@ app.use(bodyParser.json());
 app.use(cors());
 
 const db = mysql.createConnection({
-    host: 'employeeprofilinghub.com',
-    user: 'u987804198_timesheet',
-    password: '7Re;0n35L|',
-    database: 'u987804198_timesheet',
+    host: 'profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com',
+    user: 'admin',
+    password: 'testing123',
+    database: 'profiling',
 });
 // const db = mysql.createConnection({
 //     host: 'profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com',
