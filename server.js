@@ -139,9 +139,6 @@ app.post('/login', (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    console.log(username);
-    console.log(password);
-
     var sql = `SELECT * FROM accounts WHERE username = '${username}' AND password = '${password}'`;
 
     db.query(sql, function (error, result) {
@@ -149,8 +146,8 @@ app.post('/login', (req, res) => {
             console.log("Error:", error);
             res.status(500).send("Error - Something went wrong");
         } else {
-            console.log(result);
             if (result.length > 0) {
+                console.log(`${username} has logged in.`);
                 res.json({ authenticated: true });
             }
             else {
