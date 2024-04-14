@@ -16,7 +16,7 @@ app.use(bodyParser.json());
 app.use(cors());
 
 const db = mysql.createConnection({
-    host: 'employeeprofilinghub.com',
+    host: 'https://auth-db1155.hstgr.io/',
     user: 'timesheet',
     password: '7Re;0n35L|',
     database: 'timesheet',
