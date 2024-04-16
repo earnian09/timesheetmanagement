@@ -15,18 +15,39 @@ app.use(bodyParser.json());
 
 app.use(cors());
 
+// Google Forms
+const axios = require('axios');
+
+// Google Sheets
+const { google } = require('googleapis');
+const fs = require('fs');
+
+// Load credentials from the JSON file
+const credentials = require('./timesheetapi-420507-0894b1efa9f1.json');
+
+
+// Configure authentication
+const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+
+// Create Google Sheets API client
+const sheets = google.sheets({ version: 'v4', auth });
+
+// MySQL DB Connection
+// const db = mysql.createConnection({
+//     host: 'localhost',
+//     user: 'root',
+//     password: '',
+//     database: 'timesheetmanagement',
+// });
 const db = mysql.createConnection({
     host: 'profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com',
     user: 'admin',
     password: 'testing123',
     database: 'profiling',
 });
-// const db = mysql.createConnection({
-//     host: 'profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com',
-//     user: 'admin',
-//     password: 'testing123',
-//     database: 'profiling',
-// });
 
 function handleDisconnect() {
     db.connect((err) => {
@@ -50,94 +71,14 @@ function handleDisconnect() {
 }
 handleDisconnect();
 
-
-// Read
-app.post('/read', (req, res) => {
-
-    const emp_ID = req.body.emp_ID;
-    const page = req.body.page;
-    // expects_Array means if the request expects many values that will be looped in the front end.
-    expects_Array = false;
-
-    var sql = 'SELECT * FROM ';
-    // Check which page to display; grabs option from front end then selects respective table
-    switch (page) {
-        case 'employeeinfo':
-            sql += `tbl_info`;
-            break;
-        case 'certification':
-            sql += `tbl_certification`;
-            expects_Array = true;
-            break;
-        case 'dependencies':
-            sql += `tbl_dependencies`;
-            expects_Array = true;
-            break;
-        case 'organizations':
-            sql += `tbl_org`;
-            expects_Array = true;
-            break;
-        case 'accountingdetails':
-            sql += `tbl_accounting_details`;
-            break;
-        case 'education':
-            sql += `tbl_education`;
-            break;
-        case 'teachingloads':
-            sql += `tbl_teaching_loads`;
-            expects_Array = true;
-            break;
-        case 'workexperience':
-            sql += `tbl_experience`;
-            expects_Array = true;
-            break;
-        case 'employeedetails':
-            sql += `tbl_details`;
-            break;
-        case 'skills':
-            sql += `tbl_skills`;
-            expects_Array = true;
-            break;
-        case 'personalcontact':
-            sql += `tbl_personal_contact`;
-            break;
-        case 'provincialcontact':
-            sql += `tbl_provincial_contact`;
-            expects_Array = true;
-            break;
-        case 'emergency':
-            sql += `tbl_emergency`;
-            break;
-        case 'loginDetails':
-            sql += `tbl_login`;
-            break;
-        default:
-            console.log('Unknown Error');
-    }
-    sql += ` WHERE emp_ID = ${emp_ID}`
-
-    db.query(sql, function (error, result) {
-        if (error) {
-            console.log("Error:", error);
-            res.status(500).send("Internal Server Error");
-        } else {
-            if (expects_Array == false) {
-                // if the display only needs one entry
-                res.send(result[0]);
-            }
-            else if (expects_Array == true) {
-                // if the display needs multiple entries, loopable
-                res.send(result);
-            }
-        }
-    });
-});
-
 app.post('/login', (req, res) => {
     res.set('Access-Control-Allow-Origin');
 
     const username = req.body.username;
     const password = req.body.password;
+
+    console.log(username);
+    console.log(password);
 
     var sql = `SELECT * FROM accounts WHERE username = '${username}' AND password = '${password}'`;
 
@@ -146,8 +87,8 @@ app.post('/login', (req, res) => {
             console.log("Error:", error);
             res.status(500).send("Error - Something went wrong");
         } else {
+            console.log(result);
             if (result.length > 0) {
-                console.log(`${username} has logged in.`);
                 res.json({ authenticated: true });
             }
             else {
@@ -157,142 +98,168 @@ app.post('/login', (req, res) => {
     });
 });
 
-// Update or Add Values
-app.put('/update', (req, res) => {
-    const updateBody = req.body;
-
-    // Code relevant to commas in sql query
-    let keyCount = Object.keys(updateBody).length;
-    let currentKeyIndex = 0;
-
-    // updateBody.tbl will declare which table ot edit
-    var sql = `
-    UPDATE ${updateBody.tbl} SET `
-    for (let key in updateBody) {
-        // Loop through all items of a given table
-        if (updateBody.hasOwnProperty(key)) {
-            currentKeyIndex++;
-            // Skips the table declaration
-            if (key === 'tbl') {
-                continue;
-            }
-            // Skips the emp_ID declaration
-            if (key === 'emp_ID') {
-                continue;
-            }
-
-            const value = updateBody[key];
-            sql += `${key} = `
-
-            if (typeof value === 'string') {
-                sql += `'${value}'`
-            } else if (typeof value === 'number' && Number.isInteger(value)) {
-                sql += `${value}`
-            }
-            else if (!value) {
-                sql += `null`
-            }
-            // Code to check if its the last value, if it is, then no comma
-            if (currentKeyIndex < keyCount) {
-                sql += ', ';
-            }
-        }
-    }
-
-    sql += ` WHERE emp_ID = ${req.body.emp_ID}`;
-
-    console.log(sql)
-
-    db.query(sql, function (error, result) {
-        if (error) {
-            console.log("Error:", error);
-            if (error.code === 'ER_DUP_ENTRY' && error.errno === 1062) {
-                // Handle duplicate entry error
-                res.status(400).json({
-                    error: "Duplicate entry error occurred",
-                    code: error.code,
-                    errno: error.errno
-                });
-            } else {
-                // Handle other database errors
-                res.status(500).send("Error Updating");
-            }
-        } else {
-            console.log(`Updating of ${updateBody.tbl} Success`);
-            res.json({ message: `Updating of ${updateBody.tbl} Success` });
-
-        }
-    });
-
-})
-
-// Delete Values
-app.put('/delete', (req, res) => {
-    const updateBody = req.body;
-
-    // Code relevant to commas in sql query
-    let keyCount = Object.keys(updateBody).length;
-    let currentKeyIndex = 0;
-
-    // updateBody.tbl will declare which table ot edit
-    var sql = `
-    UPDATE ${updateBody.tbl} SET `
-    for (let key in updateBody) {
-        // Loop through all items of a given table
-        if (updateBody.hasOwnProperty(key)) {
-            currentKeyIndex++;
-            // Skips the table declaration
-            if (key === 'tbl') {
-                continue;
-            }
-            // Skips the emp_ID declaration
-            if (key === 'emp_ID') {
-                continue;
-            }
-            const value = updateBody[key];
-            sql += `${key} = NULL`
-            // Code to check if its the last value, if it is, then no comma
-            if (currentKeyIndex < keyCount) {
-                sql += ', ';
-            }
-
-        }
-    }
-    sql += ` WHERE emp_ID = ${req.body.emp_ID}`;
-    console.log(sql)
-
-    db.query(sql, function (error, result) {
-        if (error) {
-            console.log("Error:", error);
-            // Handle database errors
-            res.status(500).send("Error Deleting");
-        } else {
-            console.log(`Deleting of ${updateBody.tbl} Success`);
-            res.json({ message: `Deleting of ${updateBody.tbl} Success` });
-
-        }
-    });
-
-})
-
 app.post('/submit-form', (req, res) => {
     const formData = req.body;
     // Process the form data as needed
-    
-    const processData = {
-        'student_Number': formData[1],
-        'full_Nmae': formData[2],
-        'hours_EmergencyWard': formData[3],
-        'hours_A': formData[4],
-        'hours_B': formData[5],
-        'field': formData[6],
-    }
-
-    console.log(processData);
 
     res.sendStatus(200); // Send a success response
 });
 
+app.post('/submit-to-google-forms', (req, res) => {
+    const formData = req.body;
+    // Process the form data as needed
+
+    const googleformsData = {
+        'student_Number': formData.student_Number,
+        'full_Name': formData.full_Name,
+        'field': formData.field,
+        'hours': formData.hours,
+    }
+
+    console.log(googleformsData);
+
+    try {
+        let response = submitToGoogleForm(googleformsData);
+        if (response = "Success") {
+            res.json({ success: true }); // Send a success response
+        }
+        else {
+            res.json({ success: false }); // Send an error response
+        }
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        res.status(500).send('Error submitting form data');
+    }
+
+});
+
+async function submitToGoogleForm(data) {
+    try {
+        const response = await axios.post('https://script.google.com/macros/s/AKfycbw9sMkrh_OdHEk10y3U8XPqCdNUkA0q94IZshoyVTA9gOqHvZ7OSDpNdDLApN-acPyijQ/exec', data);
+        console.log('Response from Google Apps Script (Forms):', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        return "Error";
+    }
+}
+
+// Google Sheets
+async function getSpreadsheetData() {
+    try {
+        const spreadsheetId = '12hZm17uQB6FpHpe2KTIrmczSKtENXibfU6DLTa-rN48';
+        const range = 'Sheet1!A2:E'; // Specify the range you want to retrieve data from
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+
+        if (response && response.data && response.data.values) {
+            const rows = response.data.values;
+            const dataArray = []; // Array to store the data
+
+            rows.forEach(row => {
+                if (row && row.length) {
+                    // Check if the row is not empty
+                    // Here you can add additional checks if needed, e.g., check specific columns
+                    dataArray.push(row);
+                }
+            });
+
+            if (dataArray.length > 0) {
+                // Log dataArray to see the retrieved data
+                return dataArray; // Return the dataArray
+            } else {
+                console.log('No non-empty rows found.');
+                return []; // Return an empty array if no non-empty rows found
+            }
+        } else {
+            console.log('No data found.');
+            return []; // Return an empty array if no data found
+        }
+    } catch (err) {
+        console.error('The API returned an error:', err);
+        return []; // Return an empty array if an error occurs
+    }
+}
+
+
+app.get('/get-googlesheets', async (req, res) => {
+
+    try {
+        const dataArray = await getSpreadsheetData();
+        res.send(dataArray); // Send the data back to the client
+    } catch (error) {
+        console.error('An error occurred:', error);
+        res.status(500).send('An error occurred');
+    }
+
+});
+
+// Submit to G Calendar
+app.post('/submit-to-google-calendar', (req, res) => {
+    const formData = req.body;
+    // Process the form data as needed
+
+    const googleCalendarData = {
+        'student_Number': formData.student_Number,
+        'full_Name': formData.full_Name,
+        'date': formData.date,
+        'description': formData.description,
+    }
+
+    try {
+        let response = submitToGoogleCalendar(googleCalendarData);
+        if (response = "Success") {
+            res.json({ success: true }); // Send a success response
+        }
+        else {
+            res.json({ success: false }); // Send an error response
+        }
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        res.status(500).send('Error submitting form data');
+    }
+});
+
+async function submitToGoogleCalendar(data) {
+    try {
+        const response = await axios.post('https://script.google.com/macros/s/AKfycbx-pewAk41r2lwTnlnw1GN9lKU3qD1DAcyIt1PUEVWvQSWZ1V4KFdOldyZNkvNCq6eiRA/exec', data);
+        console.log('Response from Google Apps Script (Calendar):', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        return "Error";
+    }
+}
+
+// Retrieve from G Calendar
+app.post('/retrieve-from-google-calendar', async (req, res) => {
+    const formData = req.body;
+    // Process the form data as needed
+
+    try {
+        let response = await fetchTasksByTitle(formData.student_Number);
+        console.log(response);
+        res.json(JSON.stringify(response)); // Send a success response
+
+    } catch (error) {
+        console.error('Error submitting form:', error);
+        res.status(500).send('Error submitting form data');
+    }
+});
+
+// Function to fetch tasks by title using axios.post()
+async function fetchTasksByTitle(title) {
+    try {
+        const response = await axios.post('https://script.google.com/macros/s/AKfycbw8WfpsFFcxozWnzn2bOI9SXyDUJsilDOMaYQ3Aair1tmMI36buHxojiAOdDr-4xlQH0Q/exec', title);
+        const tasks = response.data;
+        return tasks;
+    } catch (error) {
+        console.error('Error fetching tasks:', error);
+        return null;
+    }
+}
 
 app.listen(port, () => {
     console.log(`Server is running on profilingdatabase.c70w002qw0l1.us-east-1.rds.amazonaws.com:${port}`);
